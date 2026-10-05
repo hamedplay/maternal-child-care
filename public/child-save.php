@@ -1,0 +1,3 @@
+<?php
+require_once __DIR__.'/../config/config.php';use App\Repositories\ChildRepository;
+if(!isset($_SESSION['user_id'])||$_SERVER['REQUEST_METHOD']!=='POST'){header('Location: index.php');exit;}$name=trim((string)($_POST['full_name']??''));$birth=trim((string)($_POST['birth_date']??''));$gender=(string)($_POST['gender']??'');if($name===''||!strtotime($birth)||!in_array($gender,['boy','girl'],true)){header('Location: children.php?error=1');exit;}(new ChildRepository())->create((int)$_SESSION['user_id'],['full_name'=>$name,'birth_date'=>$birth,'gender'=>$gender,'blood_type'=>trim((string)($_POST['blood_type']??'')),'notes'=>trim((string)($_POST['notes']??''))]);header('Location: children.php');exit;
