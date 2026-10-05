@@ -25,10 +25,10 @@ if (!$result['success']) {
     exit;
 }
 
-// ساخت session ورود
 $_SESSION['user_id']        = $result['user']['id'];
 $_SESSION['user_phone']     = $result['user']['phone'];
 $_SESSION['user_full_name'] = $result['user']['full_name'] ?? null;
+$_SESSION['user_role']      = $result['user']['role'] ?? 'user';
 
 echo json_encode([
     'success' => true,
