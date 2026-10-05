@@ -8,30 +8,26 @@ use App\Repositories\UserRepository;
 class AuthService
 {
     private const CODE_LENGTH = 5;
-    private const CODE_TTL_SECONDS = 300;          // اعتبار هر کد: ۵ دقیقه
-    private const RESEND_COOLDOWN_SECONDS = 120;   // حداقل فاصله بین دو درخواست کد: ۲ دقیقه
-    private const MAX_REQUESTS_PER_HOUR = 5;       // سقف درخواست کد برای هر شماره در هر ساعت
-    private const MAX_VERIFY_ATTEMPTS = 5;         // سقف تلاش برای وارد کردن کد درست
+    private const CODE_TTL_SECONDS = 300;
+    private const RESEND_COOLDOWN_SECONDS = 120;
+    private const MAX_REQUESTS_PER_HOUR = 5;
+    private const MAX_VERIFY_ATTEMPTS = 5;
 
     private OtpRepository $otpRepository;
     private UserRepository $userRepository;
-    private KavenegarService $kavenegar;
+    private OtpSenderInterface $otpSender;
     private string $pepper;
 
     public function __construct()
     {
         $this->otpRepository = new OtpRepository();
         $this->userRepository = new UserRepository();
-        $this->kavenegar = new KavenegarService();
-
         $config = require BASE_PATH . '/config/services.php';
-        $this->pepper = $config['otp_pepper'];
+        $provider = strtolower((string) ($config['otp_provider'] ?? 'kavenegar'));
+        $this->otpSender = $provider === 'bale' ? new BaleOtpService() : new KavenegarService();
+        $this->pepper = (string) $config['otp_pepper'];
     }
 
-    /**
-     * درخواست ارسال کد تایید برای یک شماره.
-     * @return array{success: bool, error?: string}
-     */
     public function requestOtp(string $phone): array
     {
         if (!$this->isValidPhone($phone)) {
@@ -53,29 +49,21 @@ class AuthService
         $expiresAt = date('Y-m-d H:i:s', time() + self::CODE_TTL_SECONDS);
         $ip = $_SERVER['REMOTE_ADDR'] ?? null;
 
-        // کدهای فعال قبلیِ همین شماره رو باطل می‌کنیم تا فقط آخرین کد معتبر باشه
         $this->otpRepository->invalidateActiveForPhone($phone);
         $this->otpRepository->create($phone, $codeHash, $expiresAt, $ip);
 
-        if (!$this->kavenegar->sendOtp($phone, $code)) {
+        if (!$this->otpSender->sendOtp($phone, $code)) {
             return ['success' => false, 'error' => 'ارسال پیامک با خطا مواجه شد. لطفاً دوباره تلاش کنید.'];
         }
 
         $result = ['success' => true];
-
-        // فقط وقتی کاوه‌نگار هنوز وصل نیست، کد رو مستقیم برمی‌گردونیم تا بتونی تست کنی.
-        // به‌محض تنظیم کلید API واقعی، این بخش خودش غیرفعال می‌شه.
-        if (!$this->kavenegar->isConfigured()) {
+        if (!$this->otpSender->isConfigured()) {
             $result['debug_code'] = $code;
         }
 
         return $result;
     }
 
-    /**
-     * بررسی کد وارد‌شده و در صورت درست بودن، ورود/ثبت‌نام خودکار کاربر.
-     * @return array{success: bool, error?: string, user?: array}
-     */
     public function verifyOtp(string $phone, string $code): array
     {
         if (!$this->isValidPhone($phone) || !preg_match('/^\d{' . self::CODE_LENGTH . '}$/', $code)) {
@@ -107,10 +95,6 @@ class AuthService
         return ['success' => true, 'user' => $user, 'is_new' => $isNew];
     }
 
-    /**
-     * تکمیل ثبت‌نام: ذخیره‌ی اسم کاربری که تازه برای اولین بار وارد شده.
-     * @return array{success: bool, error?: string, user?: array}
-     */
     public function setName(int $userId, string $name): array
     {
         $name = trim(preg_replace('/\s+/u', ' ', $name));
