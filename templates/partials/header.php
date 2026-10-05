@@ -14,7 +14,7 @@ if ($isLoggedIn && !empty($_SESSION['user_phone'])) {
 ?>
 <header class="header-wrapper" id="headerWrapper">
     <div class="header" id="header">
-        <a href="index.php" class="logo-area"><img src="assets/image/logo.png" alt="مراقبت مادر و کودک" class="logo-image" /><span class="logo-text">مراقبت مادر و کودک</span></a>
+        <a href="index.php" class="logo-area" aria-label="مراقبت مادر و کودک"><img src="assets/image/logo.png" alt="مراقبت مادر و کودک" class="logo-image" /></a>
         <ul class="nav-menu">
             <li><a href="index.php" class="<?= $activePage === 'home' ? 'active' : '' ?>">خانه</a></li>
             <li class="has-dropdown">
