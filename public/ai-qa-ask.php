@@ -37,20 +37,25 @@ if ($userId) {
     $pastQuestions = [];
 }
 
-// Retriever: سوال فعلی + علایق اخیر همان کاربر برای بازیابی زمینه مرتبط‌تر.
 $retrievalQuery = trim($question . ' ' . implode(' ', array_slice($pastQuestions, 0, 3)));
-$knowledgeRepository = new AiKnowledgeRepository();
-$contextBlocks = $knowledgeRepository->search($retrievalQuery);
+$contextBlocks = (new AiKnowledgeRepository())->search($retrievalQuery);
+$answer = (new LlmService())->ask($question, $contextBlocks, $recentHistory);
 
-$llmService = new LlmService();
-$answer = $llmService->ask($question, $contextBlocks, $recentHistory);
+$recommendText = $question . ' ' . implode(' ', array_slice($pastQuestions, 0, 5));
+$recommendations = (new ArticleRecommendationRepository())->recommend($recommendText, 3);
+if ($recommendations) {
+    $answer .= "\n\n### مقاله‌های پیشنهادی برای شما";
+    foreach ($recommendations as $article) {
+        $url = 'article.php?slug=' . rawurlencode((string) $article['slug']);
+        $answer .= "\n• {$article['title']} — {$url}";
+    }
+}
 
 if ($userId) {
     $chatRepository->saveMessage($userId, 'user', $question);
     $chatRepository->saveMessage($userId, 'assistant', $answer);
 }
 
-// برای نمایش تاریخچه در همین مرورگر، Session هم همیشه به‌روز می‌ماند.
 $_SESSION['ai_chat_history'] = isset($_SESSION['ai_chat_history']) && is_array($_SESSION['ai_chat_history']) ? $_SESSION['ai_chat_history'] : [];
 $_SESSION['ai_chat_history'][] = ['role' => 'user', 'content' => $question];
 $_SESSION['ai_chat_history'][] = ['role' => 'assistant', 'content' => $answer];
@@ -58,14 +63,4 @@ if (count($_SESSION['ai_chat_history']) > 40) {
     $_SESSION['ai_chat_history'] = array_slice($_SESSION['ai_chat_history'], -40);
 }
 
-$recommendText = $question . ' ' . implode(' ', array_slice($pastQuestions, 0, 5));
-$recommendations = (new ArticleRecommendationRepository())->recommend($recommendText, 3);
-foreach ($recommendations as &$article) {
-    $article['url'] = 'article.php?slug=' . rawurlencode((string) $article['slug']);
-}
-unset($article);
-
-echo json_encode([
-    'answer' => $answer,
-    'recommendations' => $recommendations,
-], JSON_UNESCAPED_UNICODE);
+echo json_encode(['answer' => $answer], JSON_UNESCAPED_UNICODE);
